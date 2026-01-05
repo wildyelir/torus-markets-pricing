@@ -72,6 +72,73 @@
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.5);
         }
+        
+        /* Favorite star button */
+        .star-btn {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 1.2rem;
+        }
+        .star-btn:hover {
+            transform: scale(1.2);
+        }
+        .star-btn.favorited {
+            color: #fbbf24;
+        }
+        .star-btn:not(.favorited) {
+            color: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* Filter toggle buttons */
+        .filter-btn {
+            transition: all 0.2s ease;
+        }
+        .filter-btn.active {
+            background: rgba(147, 51, 234, 0.8);
+            border-color: rgba(147, 51, 234, 1);
+        }
+        .filter-btn:not(.active) {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        .filter-btn:not(.active):hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        /* Editable token name */
+        .token-name {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+        .token-name:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .token-name-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(147, 51, 234, 0.5);
+            border-radius: 4px;
+            padding: 2px 6px;
+            color: white;
+            font-size: inherit;
+            width: 120px;
+        }
+        .token-name-input:focus {
+            outline: none;
+            border-color: rgba(147, 51, 234, 1);
+        }
+        
+        /* Edit hint tooltip */
+        .edit-hint {
+            font-size: 0.65rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .token-name:hover + .edit-hint,
+        .token-name:hover .edit-hint {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="gradient-bg text-white">
@@ -140,11 +207,31 @@
         
         <!-- Markets Table -->
         <div class="card-glass rounded-2xl p-6 overflow-hidden">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold">All Torus Markets</h2>
-                <p class="text-sm text-white/60">
-                    Data from <code class="bg-white/10 px-2 py-1 rounded">torus.exchange/markets</code>
-                </p>
+            
+            <!-- Header with Filter Toggles -->
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-xl font-bold">Torus Markets</h2>
+                    <p class="text-sm text-white/60 mt-1">
+                        Click ☆ to favorite • Click name to edit
+                    </p>
+                </div>
+                
+                <!-- Filter Toggle Buttons -->
+                <div class="flex items-center gap-2">
+                    <button onclick="setFilter('all')" 
+                            id="filterAllBtn"
+                            class="filter-btn active px-4 py-2 rounded-lg text-sm font-medium border">
+                        All Markets
+                    </button>
+                    <button onclick="setFilter('favorites')" 
+                            id="filterFavBtn"
+                            class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border flex items-center gap-1">
+                        <span>⭐</span>
+                        <span>Favorites</span>
+                        <span id="favCount" class="bg-white/20 px-1.5 py-0.5 rounded text-xs ml-1">0</span>
+                    </button>
+                </div>
             </div>
             
             <!-- Loading State -->
@@ -169,6 +256,7 @@
                 <table class="w-full">
                     <thead>
                         <tr class="text-left text-white/60 text-sm border-b border-white/10">
+                            <th class="pb-4 pr-2 w-10">★</th>
                             <th class="pb-4 pr-4">#</th>
                             <th class="pb-4 pr-4">Token Name</th>
                             <th class="pb-4 pr-4 text-center">Price (CVM)</th>
@@ -189,14 +277,55 @@
                 <p class="text-white/40 text-4xl mb-4">📭</p>
                 <p class="text-white/60">No markets found on the network</p>
             </div>
+            
+            <!-- No Favorites State -->
+            <div id="noFavoritesState" class="hidden flex flex-col items-center justify-center py-12">
+                <p class="text-white/40 text-4xl mb-4">⭐</p>
+                <p class="text-white/60 mb-2">No favorite markets yet</p>
+                <p class="text-white/40 text-sm">Click the ☆ star icon on any market to add it to your favorites</p>
+            </div>
         </div>
         
         <!-- Footer Info -->
         <div class="mt-8 text-center text-white/40 text-sm">
             <p>Connected to: <code class="bg-white/10 px-2 py-1 rounded">https://mikera1337-convex-testnet.hf.space</code></p>
-            <p class="mt-2">Torus Market Dashboard v1.0 | Data refreshes on demand</p>
+            <p class="mt-2">Torus Market Dashboard v1.1 | Data refreshes on demand</p>
         </div>
     </main>
+    
+    <!-- ============================================
+         EDIT NAME MODAL
+         ============================================ -->
+    <div id="editNameModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+        <div class="card-glass rounded-2xl p-6 max-w-sm w-full mx-4">
+            <h3 class="text-lg font-bold mb-4">Edit Token Name</h3>
+            
+            <div class="mb-4">
+                <p class="text-sm text-white/60 mb-2">Token ID: <code id="editTokenId" class="bg-white/10 px-2 py-1 rounded">#000</code></p>
+                <input type="text" 
+                       id="editNameInput" 
+                       placeholder="Enter token name (e.g., USD, GOLD)" 
+                       maxlength="20"
+                       class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500">
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="saveTokenName()" 
+                        class="flex-1 bg-purple-600 hover:bg-purple-700 py-2 rounded-lg font-medium">
+                    Save
+                </button>
+                <button onclick="closeEditModal()" 
+                        class="flex-1 bg-white/10 hover:bg-white/20 py-2 rounded-lg font-medium">
+                    Cancel
+                </button>
+            </div>
+            
+            <button onclick="clearTokenName()" 
+                    class="w-full mt-3 text-red-400 hover:text-red-300 text-sm py-2">
+                Clear Name
+            </button>
+        </div>
+    </div>
 
     <!-- ============================================
          JAVASCRIPT - Market Data Fetching
@@ -212,9 +341,19 @@
         // Store for market data
         let marketsData = [];
         
+        // Current filter: 'all' or 'favorites'
+        let currentFilter = 'all';
+        
         // User-defined token names (stored in localStorage)
         // Format: { "#128": "USD", "#130": "GOLD", ... }
         let tokenNames = {};
+        
+        // User's favorite markets (stored in localStorage)
+        // Format: ["#128", "#130", ...]
+        let favorites = [];
+        
+        // Currently editing token address
+        let editingTokenAddress = null;
         
         // Pre-defined token names (known tokens on the network)
         const DEFAULT_TOKEN_NAMES = {
@@ -229,32 +368,182 @@
         
         // Run when page loads
         window.onload = function() {
-            console.log('🚀 Torus Market Dashboard v1.0 initialized');
-            loadTokenNames();
+            console.log('🚀 Torus Market Dashboard v1.1 initialized');
+            loadUserData();
             refreshAllMarkets();
         };
         
-        // Load user-defined token names from localStorage
-        function loadTokenNames() {
+        // Load user data from localStorage (names and favorites)
+        function loadUserData() {
             // Start with default token names
             tokenNames = { ...DEFAULT_TOKEN_NAMES };
             
             // Merge with any user-defined names (user names override defaults)
-            const saved = localStorage.getItem('torus_token_names');
-            if (saved) {
-                const userNames = JSON.parse(saved);
+            const savedNames = localStorage.getItem('torus_token_names');
+            if (savedNames) {
+                const userNames = JSON.parse(savedNames);
                 tokenNames = { ...tokenNames, ...userNames };
-                console.log('✓ Loaded token names:', tokenNames);
-            } else {
-                console.log('✓ Using default token names:', tokenNames);
             }
+            console.log('✓ Loaded token names:', tokenNames);
+            
+            // Load favorites
+            const savedFavorites = localStorage.getItem('torus_favorites');
+            if (savedFavorites) {
+                favorites = JSON.parse(savedFavorites);
+            }
+            console.log('✓ Loaded favorites:', favorites);
+            
+            updateFavCount();
         }
         
         // Save token names to localStorage
-        function saveTokenNames() {
+        function saveUserData() {
             localStorage.setItem('torus_token_names', JSON.stringify(tokenNames));
-            console.log('✓ Saved token names');
+            localStorage.setItem('torus_favorites', JSON.stringify(favorites));
+            console.log('✓ Saved user data');
         }
+        
+        // ============================================
+        // FILTER FUNCTIONS
+        // ============================================
+        
+        /**
+         * Set the current filter and re-render the table
+         * @param {string} filter - 'all' or 'favorites'
+         */
+        function setFilter(filter) {
+            currentFilter = filter;
+            
+            // Update button states
+            const allBtn = document.getElementById('filterAllBtn');
+            const favBtn = document.getElementById('filterFavBtn');
+            
+            if (filter === 'all') {
+                allBtn.classList.add('active');
+                favBtn.classList.remove('active');
+            } else {
+                allBtn.classList.remove('active');
+                favBtn.classList.add('active');
+            }
+            
+            // Re-render the table with the new filter
+            renderMarketsTable();
+        }
+        
+        /**
+         * Update the favorites count badge
+         */
+        function updateFavCount() {
+            document.getElementById('favCount').textContent = favorites.length;
+        }
+        
+        // ============================================
+        // FAVORITES FUNCTIONS
+        // ============================================
+        
+        /**
+         * Toggle a market as favorite
+         * @param {string} tokenAddress - The token address to toggle
+         */
+        function toggleFavorite(tokenAddress) {
+            const index = favorites.indexOf(tokenAddress);
+            
+            if (index === -1) {
+                // Add to favorites
+                favorites.push(tokenAddress);
+                console.log('⭐ Added to favorites:', tokenAddress);
+            } else {
+                // Remove from favorites
+                favorites.splice(index, 1);
+                console.log('☆ Removed from favorites:', tokenAddress);
+            }
+            
+            saveUserData();
+            updateFavCount();
+            renderMarketsTable();
+        }
+        
+        /**
+         * Check if a token is favorited
+         * @param {string} tokenAddress - The token address to check
+         * @returns {boolean} - True if favorited
+         */
+        function isFavorite(tokenAddress) {
+            return favorites.includes(tokenAddress);
+        }
+        
+        // ============================================
+        // TOKEN NAME EDITING FUNCTIONS
+        // ============================================
+        
+        /**
+         * Open the edit name modal for a token
+         * @param {string} tokenAddress - The token address to edit
+         */
+        function openEditModal(tokenAddress) {
+            editingTokenAddress = tokenAddress;
+            
+            document.getElementById('editTokenId').textContent = tokenAddress;
+            document.getElementById('editNameInput').value = tokenNames[tokenAddress] || '';
+            document.getElementById('editNameModal').classList.remove('hidden');
+            
+            // Focus the input
+            setTimeout(() => {
+                document.getElementById('editNameInput').focus();
+            }, 100);
+        }
+        
+        /**
+         * Close the edit name modal
+         */
+        function closeEditModal() {
+            document.getElementById('editNameModal').classList.add('hidden');
+            editingTokenAddress = null;
+        }
+        
+        /**
+         * Save the token name from the modal
+         */
+        function saveTokenName() {
+            if (!editingTokenAddress) return;
+            
+            const newName = document.getElementById('editNameInput').value.trim();
+            
+            if (newName) {
+                tokenNames[editingTokenAddress] = newName;
+                console.log('✓ Saved name for', editingTokenAddress, ':', newName);
+            } else {
+                // Remove the name if empty
+                delete tokenNames[editingTokenAddress];
+                console.log('✓ Cleared name for', editingTokenAddress);
+            }
+            
+            saveUserData();
+            renderMarketsTable();
+            closeEditModal();
+        }
+        
+        /**
+         * Clear the token name
+         */
+        function clearTokenName() {
+            if (!editingTokenAddress) return;
+            
+            delete tokenNames[editingTokenAddress];
+            saveUserData();
+            renderMarketsTable();
+            closeEditModal();
+        }
+        
+        // Handle Enter key in the edit input
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !document.getElementById('editNameModal').classList.contains('hidden')) {
+                saveTokenName();
+            }
+            if (e.key === 'Escape' && !document.getElementById('editNameModal').classList.contains('hidden')) {
+                closeEditModal();
+            }
+        });
         
         // ============================================
         // API FUNCTIONS - Querying the Blockchain
@@ -385,7 +674,6 @@
                 // Step 3: Update the UI
                 renderMarketsTable();
                 updateStats(marketsData.length, totalCvmLiquidity);
-                showState('table');
                 
                 console.log('✓ Markets refreshed successfully');
                 
@@ -405,7 +693,7 @@
         // ============================================
         
         /**
-         * Show a specific UI state (loading, error, table, empty)
+         * Show a specific UI state (loading, error, table, empty, noFavorites)
          * @param {string} state - The state to show
          */
         function showState(state) {
@@ -413,6 +701,7 @@
             document.getElementById('errorState').classList.add('hidden');
             document.getElementById('marketsTable').classList.add('hidden');
             document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('noFavoritesState').classList.add('hidden');
             
             switch(state) {
                 case 'loading':
@@ -426,6 +715,9 @@
                     break;
                 case 'empty':
                     document.getElementById('emptyState').classList.remove('hidden');
+                    break;
+                case 'noFavorites':
+                    document.getElementById('noFavoritesState').classList.remove('hidden');
                     break;
             }
         }
@@ -451,24 +743,55 @@
         }
         
         /**
-         * Render the markets table with current data
+         * Render the markets table with current data and filter
          */
         function renderMarketsTable() {
             const tbody = document.getElementById('marketsTableBody');
             tbody.innerHTML = '';
             
-            marketsData.forEach((market, index) => {
+            // Filter data based on current filter
+            let filteredData = marketsData;
+            if (currentFilter === 'favorites') {
+                filteredData = marketsData.filter(m => isFavorite(m.tokenAddress));
+                
+                // Show "no favorites" state if empty
+                if (filteredData.length === 0) {
+                    showState('noFavorites');
+                    return;
+                }
+            }
+            
+            // Show table if we have data
+            if (filteredData.length === 0) {
+                showState('empty');
+                return;
+            }
+            
+            showState('table');
+            
+            filteredData.forEach((market, index) => {
                 const row = document.createElement('tr');
                 row.className = 'table-row-hover border-b border-white/5 transition-colors';
+                
+                // Check if favorited
+                const favorited = isFavorite(market.tokenAddress);
+                const starClass = favorited ? 'favorited' : '';
+                const starIcon = favorited ? '⭐' : '☆';
                 
                 // Get user-defined name or show placeholder
                 const tokenName = tokenNames[market.tokenAddress] || '—';
                 const nameClass = tokenNames[market.tokenAddress] ? 'text-white' : 'text-white/40 italic';
                 
                 row.innerHTML = `
+                    <td class="py-4 pr-2">
+                        <span class="star-btn ${starClass}" onclick="toggleFavorite('${market.tokenAddress}')">${starIcon}</span>
+                    </td>
                     <td class="py-4 pr-4 text-white/60">${index + 1}</td>
                     <td class="py-4 pr-4">
-                        <span class="${nameClass}">${tokenName}</span>
+                        <span class="token-name ${nameClass}" onclick="openEditModal('${market.tokenAddress}')" title="Click to edit name">
+                            ${tokenName}
+                            <span class="text-white/30 text-xs ml-1">✎</span>
+                        </span>
                     </td>
                     <td class="py-4 pr-4 text-center font-mono">
                         ${market.error ? '<span class="text-red-400">Error</span>' : formatPrice(market.price)}
